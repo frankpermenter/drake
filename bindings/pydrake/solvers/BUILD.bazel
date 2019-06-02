@@ -193,6 +193,14 @@ drake_py_unittest(
     deps = [":mosek_py"],
 )
 
+drake_py_test(
+    name = "soserror",
+    allow_import_unittest = True,
+    srcs = ["soserror.py"],
+    deps = [":mathematicalprogram_py", ":mosek_py"],
+)
+
+
 drake_py_unittest(
     name = "osqp_solver_test",
     args = select({
@@ -213,5 +221,7 @@ drake_py_unittest(
         "//bindings/pydrake/common/test_utilities",
     ],
 )
+
+
 
 add_lint_tests_pydrake()

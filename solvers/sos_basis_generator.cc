@@ -3,6 +3,8 @@
 #include <vector>
 
 #include <Eigen/Core>
+#include <iostream>
+#include <chrono>
 
 #include "drake/solvers/integer_inequality_solver.h"
 namespace drake {
@@ -106,9 +108,11 @@ void Intersection(const ExponentList& A, ExponentList* B) {
  * Automatic Control, 2009." After execution, all exponents of inconsistent
  * monomials are removed from exponents_of_basis.
 */
-void RemoveDiagonallyInconsistentExponents(const ExponentList& exponents_of_p,
+int RemoveDiagonallyInconsistentExponents(const ExponentList& exponents_of_p,
                                            ExponentList* exponents_of_basis) {
+  int iterations = 0;
   while (1) {
+    iterations++;
     int num_exponents = exponents_of_basis->rows();
 
     ExponentList valid_squares =
@@ -119,9 +123,10 @@ void RemoveDiagonallyInconsistentExponents(const ExponentList& exponents_of_p,
     (*exponents_of_basis) = (*exponents_of_basis) / 2;
 
     if (exponents_of_basis->rows() == num_exponents) {
-      return;
+      break;
     }
   }
+  return iterations;
 }
 
 struct Hyperplanes {
@@ -137,7 +142,6 @@ struct Hyperplanes {
 Hyperplanes RandomSupportingHyperplanes(const ExponentList& exponents_of_p) {
   Hyperplanes H;
 
-
   // get_random() samples uniformly between normal_vector_component_min/max.
   const int normal_vector_component_min  = 1;
   const int normal_vector_component_max  = 20;
@@ -150,7 +154,7 @@ Hyperplanes RandomSupportingHyperplanes(const ExponentList& exponents_of_p) {
   // Number of hyperplanes currently picked heuristically.
   // TODO(frankpermenter): Pick using degree, number of variables,
   // and length of exponents_of_p.
-  int num_hyperplanes = 10*exponents_of_p.cols();
+  int num_hyperplanes = 100*exponents_of_p.cols();
 
   //  We generate nonnegative or nonpositive columns so that call to
   //  EnumerateIntegerSolutions is more efficient.
@@ -168,13 +172,29 @@ Hyperplanes RandomSupportingHyperplanes(const ExponentList& exponents_of_p) {
   return H;
 }
 
-ExponentList ConstructMonomialBasis(const ExponentList& exponents_of_p) {
+Hyperplanes DegreeInducedHyperplanes(const ExponentList& exponents_of_p) {
+  Hyperplanes H;
+
+  // get_random() samples uniformly between normal_vector_component_min/max.
+
+  //  We generate nonnegative or nonpositive columns so that call to
+  //  EnumerateIntegerSolutions is more efficient.
+  H.normal_vectors.resize(1, exponents_of_p.cols());
+  H.normal_vectors.setConstant(1);
+
+  Eigen::MatrixXi dot_products = H.normal_vectors * exponents_of_p.transpose();
+  H.max_dot_product = dot_products.rowwise().maxCoeff() / 2;
+  H.min_dot_product = dot_products.rowwise().minCoeff() / 2;
+
+  return H;
+}
+
+ExponentList EnumerateInitialSet(const ExponentList& exponents_of_p) {
   Eigen::VectorXi lower_bounds = exponents_of_p.colwise().minCoeff() / 2;
   Eigen::VectorXi upper_bounds = exponents_of_p.colwise().maxCoeff() / 2;
-
   // Note: RandomSupportingHyperplanes is actually deterministic due to
   // its internal initialization of the random number seed.
-  Hyperplanes hyperplanes = RandomSupportingHyperplanes(exponents_of_p);
+  Hyperplanes hyperplanes = DegreeInducedHyperplanes(exponents_of_p);
 
   // We check the inequalities in two batches to allow for internal
   // infeasibility propagation inside of EnumerateIntegerSolutions,
@@ -190,12 +210,83 @@ ExponentList ConstructMonomialBasis(const ExponentList& exponents_of_p) {
       upper_bounds);
 
   Intersection(basis_exponents_1, &basis_exponents);
-  RemoveDiagonallyInconsistentExponents(exponents_of_p, &basis_exponents);
+  return basis_exponents;
+}
+
+int RemoveWithRandomSeperatingHyperplanes(const ExponentList& exponents_of_p,
+                                                   ExponentList* basis) {
+  Eigen::MatrixXi dot_products;
+
+  int iterations = 0;
+  while (1) {
+    iterations++;
+
+    int next_basis_size = 0;
+    int current_basis_size = basis->rows();
+    auto H = RandomSupportingHyperplanes(exponents_of_p);
+    dot_products = (*basis) * H.normal_vectors.transpose();
+
+    for (int i = 0; i < current_basis_size; i++) {
+        bool keep_monomial = true;
+        for (int j = 0; j < dot_products.cols(); j++) {
+            if (dot_products(i, j) > H.max_dot_product(j) ||
+                dot_products(i, j) < H.min_dot_product(j) ) {
+               keep_monomial  = false;
+               break;
+            }
+        }
+
+        if (keep_monomial) {
+            basis->row(next_basis_size++) = basis->row(i);
+        }
+    }
+
+    basis->conservativeResize(next_basis_size, basis->cols());
+
+    constexpr double kMinimumProgress = .9;
+    if (next_basis_size > current_basis_size * kMinimumProgress ||
+        next_basis_size == 0) {
+      // Quit if no progress.
+      break;
+    }
+  }
+  return iterations;
+}
+
+ExponentList ConstructMonomialBasis(const ExponentList& exponents_of_p) {
+
+  std::cerr << "\nStarting monomial basis calculation... ";
+  auto start = std::chrono::system_clock::now();
+
+  auto basis_exponents = EnumerateInitialSet(exponents_of_p);
+  std::cerr << "\nInitial Basis Size: " << basis_exponents.rows();
+
+  auto end = std::chrono::system_clock::now();
+  int time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+  std::cerr << "\nTime For Enumeration: " << time;
+
+
+  start = std::chrono::system_clock::now();
+  int iters = RemoveWithRandomSeperatingHyperplanes(exponents_of_p, &basis_exponents);
+  end = std::chrono::system_clock::now();
+  time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+  std::cerr << "\nTime For Random: " << time;
+  std::cerr << "\nIters For Random: " << iters;
+  std::cerr << "\nBasis Size After Random: " << basis_exponents.rows();
+
+  start = std::chrono::system_clock::now();
+  iters = RemoveDiagonallyInconsistentExponents(exponents_of_p, &basis_exponents);
+  end = std::chrono::system_clock::now();
+
+  time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+  std::cerr << "\nTime Diag Ins: " << time;
+  std::cerr << "\nIters For Diag " << iters;
+  std::cerr << "\nBasis Size After Diag " << basis_exponents.rows();
+
   return basis_exponents;
 }
 
 }  // namespace
-
 
 MonomialVector ConstructMonomialBasis(const drake::symbolic::Polynomial& p) {
   drake::VectorX<Variable> vars(p.indeterminates().size());
