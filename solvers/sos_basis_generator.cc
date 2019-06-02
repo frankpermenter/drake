@@ -286,27 +286,46 @@ ExponentList ConstructMonomialBasis(const ExponentList& exponents_of_p) {
 
 }  // namespace
 
+
+template<typename T>
+int GetTime(T start, T end) {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+}
+
 MonomialVector ConstructMonomialBasis(const drake::symbolic::Polynomial& p) {
   std::cerr << "\nStarting monomial basis calculation... ";
   auto start = std::chrono::system_clock::now();
+
   drake::VectorX<Variable> vars(p.indeterminates().size());
   int cnt = 0;
   for (auto& var : p.indeterminates()) {
     vars(cnt++) = var;
   }
 
-  std::cerr << "\nGetting exponents... ";
+  std::cerr << "\nConverting from symbolic... ";
 
   auto start1 = std::chrono::system_clock::now();
   auto exponents = GetPolynomialExponents(p);
+  auto end1 = std::chrono::system_clock::now();
+  int time_exp = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1).count();
+  std::cerr << "... " << time_exp << "usec";
+
+
+  std::cerr << "\nGetting basis... ";
+  auto start2 = std::chrono::system_clock::now();
+  auto monomial_exponents = ConstructMonomialBasis(exponents);
   auto end2 = std::chrono::system_clock::now();
-  int time_exp = std::chrono::duration_cast<std::chrono::microseconds>(end2 - start1).count();
-  std::cerr << "\ngot exponents... " << time_exp << "usec";
-  auto monomials = ExponentsToMonomials(ConstructMonomialBasis(exponents), vars);
+  std::cerr << "\ngot basis... " << GetTime(start2, end2) << "usec";
+
+  std::cerr << "\nConverting basis to symbolic... ";
+  auto start3 = std::chrono::system_clock::now();
+  auto monomials = ExponentsToMonomials(monomial_exponents, vars);
+  auto end3 = std::chrono::system_clock::now();
+  std::cerr << GetTime(start3, end3) << "usec";
 
   auto end = std::chrono::system_clock::now();
   int time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-  std::cerr << "\t Calculation finished in " << time  << " milliseconds. \n";
+  std::cerr << "\nExiting.  Total time: " << time  << " milliseconds. \n";
   return monomials;
 }
 }  // namespace solvers
