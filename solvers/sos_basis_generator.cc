@@ -255,12 +255,10 @@ int RemoveWithRandomSeperatingHyperplanes(const ExponentList& exponents_of_p,
 
 ExponentList ConstructMonomialBasis(const ExponentList& exponents_of_p) {
 
-  std::cerr << "\nStarting monomial basis calculation... ";
+  std::cerr << "\nStarting Enumeration..";
   auto start = std::chrono::system_clock::now();
-
   auto basis_exponents = EnumerateInitialSet(exponents_of_p);
   std::cerr << "\nInitial Basis Size: " << basis_exponents.rows();
-
   auto end = std::chrono::system_clock::now();
   int time = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
   std::cerr << "\nTime For Enumeration: " << time;
@@ -289,13 +287,27 @@ ExponentList ConstructMonomialBasis(const ExponentList& exponents_of_p) {
 }  // namespace
 
 MonomialVector ConstructMonomialBasis(const drake::symbolic::Polynomial& p) {
+  std::cerr << "\nStarting monomial basis calculation... ";
+  auto start = std::chrono::system_clock::now();
   drake::VectorX<Variable> vars(p.indeterminates().size());
   int cnt = 0;
   for (auto& var : p.indeterminates()) {
     vars(cnt++) = var;
   }
-  return ExponentsToMonomials(ConstructMonomialBasis(GetPolynomialExponents(p)),
-                              vars);
+
+  std::cerr << "\nGetting exponents... ";
+
+  auto start1 = std::chrono::system_clock::now();
+  auto exponents = GetPolynomialExponents(p);
+  auto end2 = std::chrono::system_clock::now();
+  int time_exp = std::chrono::duration_cast<std::chrono::microseconds>(end2 - start1).count();
+  std::cerr << "\ngot exponents... " << time_exp << "usec";
+  auto monomials = ExponentsToMonomials(ConstructMonomialBasis(exponents), vars);
+
+  auto end = std::chrono::system_clock::now();
+  int time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+  std::cerr << "\t Calculation finished in " << time  << " milliseconds. \n";
+  return monomials;
 }
 }  // namespace solvers
 }  // namespace drake
