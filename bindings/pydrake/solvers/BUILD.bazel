@@ -194,9 +194,9 @@ drake_py_unittest(
 )
 
 drake_py_test(
-    name = "soserror",
+    name = "sos_example",
     allow_import_unittest = True,
-    srcs = ["soserror.py"],
+    srcs = ["sos_example.py"],
     deps = [":mathematicalprogram_py", ":mosek_py"],
 )
 

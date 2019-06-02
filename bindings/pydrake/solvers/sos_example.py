@@ -97,14 +97,8 @@ if __name__ == "__main__":
                     lambda_fu, Qu = prog.NewSosPolynomial(monomial_basis)  
                     p -= lambda_fu * sym.Polynomial(f_max - (f[i] + f[i+3])/np.sqrt(1+mu**2))
 
-
         print("Adding SOS constraint")
-        start = timeit.timeit()
         prog.AddSosConstraint(p)
-        end = timeit.timeit()
-        print("Adding SOS constraint took:")
-        print(end - start)
-
 
         prog.AddLinearCost(-rho)
 
