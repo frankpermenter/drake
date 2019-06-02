@@ -154,7 +154,7 @@ Hyperplanes RandomSupportingHyperplanes(const ExponentList& exponents_of_p) {
   // Number of hyperplanes currently picked heuristically.
   // TODO(frankpermenter): Pick using degree, number of variables,
   // and length of exponents_of_p.
-  int num_hyperplanes = 100*exponents_of_p.cols();
+  int num_hyperplanes = 10*exponents_of_p.cols();
 
   //  We generate nonnegative or nonpositive columns so that call to
   //  EnumerateIntegerSolutions is more efficient.
@@ -307,8 +307,7 @@ MonomialVector ConstructMonomialBasis(const drake::symbolic::Polynomial& p) {
   auto start1 = std::chrono::system_clock::now();
   auto exponents = GetPolynomialExponents(p);
   auto end1 = std::chrono::system_clock::now();
-  int time_exp = std::chrono::duration_cast<std::chrono::microseconds>(end1 - start1).count();
-  std::cerr << "... " << time_exp << "usec";
+  std::cerr <<  GetTime(start1, end1) << "usec";
 
 
   std::cerr << "\nGetting basis... ";
@@ -324,8 +323,7 @@ MonomialVector ConstructMonomialBasis(const drake::symbolic::Polynomial& p) {
   std::cerr << GetTime(start3, end3) << "usec";
 
   auto end = std::chrono::system_clock::now();
-  int time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-  std::cerr << "\nExiting.  Total time: " << time  << " milliseconds. \n";
+  std::cerr << "\nExiting.  Total time: " << GetTime(start, end)  << " usec. \n";
   return monomials;
 }
 }  // namespace solvers
