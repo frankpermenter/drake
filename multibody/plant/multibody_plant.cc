@@ -27,6 +27,13 @@
 #include "drake/multibody/tree/prismatic_joint.h"
 #include "drake/multibody/tree/revolute_joint.h"
 
+#include <iostream>
+#define PRINT_VAR(a) (void)a;
+#define PRINT_VARn(a) (void)a;
+
+//#define PRINT_VAR(a) std::cout << #a ": " << a << std::endl;
+//#define PRINT_VARn(a) std::cout << #a ":\n" << a << std::endl;
+
 namespace drake {
 namespace multibody {
 
@@ -45,6 +52,7 @@ using geometry::GeometryFrame;
 using geometry::GeometryId;
 using geometry::GeometryInstance;
 using geometry::PenetrationAsPointPair;
+using geometry::SignedDistancePair;
 using geometry::ProximityProperties;
 using geometry::render::RenderLabel;
 using geometry::SceneGraph;
@@ -1122,6 +1130,28 @@ MultibodyPlant<symbolic::Expression>::CalcPointPairPenetrations(
 }
 
 template <>
+std::vector<SignedDistancePair<double>>
+MultibodyPlant<double>::CalcSignedDistancePairwise(
+    const systems::Context<double>& context) const {
+  if (num_collision_geometries() > 0) {
+    const auto& query_object = EvalGeometryQueryInput(context);
+    const double distance_threshold = 0.01;
+    //std::numeric_limits<double>::infinity();
+    return query_object.ComputeSignedDistancePairwiseClosestPoints(
+        distance_threshold);
+  }
+  return std::vector<SignedDistancePair<double>>();
+}
+
+template <typename T>
+std::vector<SignedDistancePair<T>>
+MultibodyPlant<T>::CalcSignedDistancePairwise(
+    const systems::Context<T>&) const {
+  throw std::domain_error(fmt::format("This method doesn't support T = {}.",
+                                      NiceTypeName::Get<T>()));
+}
+
+template <>
 std::vector<CoulombFriction<double>>
 MultibodyPlant<symbolic::Expression>::CalcCombinedFrictionCoefficients(
     const drake::systems::Context<symbolic::Expression>&,
@@ -1360,31 +1390,33 @@ void MultibodyPlant<T>::CalcContactResultsContinuousPointPair(
   }
 }
 
-template <typename T>
-void MultibodyPlant<T>::CalcContactResultsDiscrete(
-    const systems::Context<T>& context,
-    ContactResults<T>* contact_results) const {
+template <>
+void MultibodyPlant<double>::CalcContactResultsDiscrete(
+    const systems::Context<double>& context,
+    ContactResults<double>* contact_results) const {
   this->ValidateContext(context);
   DRAKE_DEMAND(contact_results != nullptr);
   if (num_collision_geometries() == 0) return;
 
-  const std::vector<PenetrationAsPointPair<T>>& point_pairs =
-      EvalPointPairPenetrations(context);
-  const std::vector<RotationMatrix<T>>& R_WC_set =
+  const std::vector<SignedDistancePair<double>>& point_pairs =
+      EvalSignedDistancePairwise(context);
+  const std::vector<RotationMatrix<double>>& R_WC_set =
       EvalContactJacobians(context).R_WC_list;
-  const contact_solvers::internal::ContactSolverResults<T>& solver_results =
-      EvalTamsiResults(context);
+  const contact_solvers::internal::ContactSolverResults<double>&
+      solver_results = EvalTamsiResults(context);
 
-  const VectorX<T>& fn = solver_results.fn;
-  const VectorX<T>& ft = solver_results.ft;
-  const VectorX<T>& vt = solver_results.vt;
-  const VectorX<T>& vn = solver_results.vn;
+  const VectorX<double>& fn = solver_results.fn;
+  const VectorX<double>& ft = solver_results.ft;
+  const VectorX<double>& vt = solver_results.vt;
+  const VectorX<double>& vn = solver_results.vn;
 
   const int num_contacts = point_pairs.size();
   DRAKE_DEMAND(fn.size() == num_contacts);
   DRAKE_DEMAND(ft.size() == 2 * num_contacts);
   DRAKE_DEMAND(vn.size() == num_contacts);
   DRAKE_DEMAND(vt.size() == 2 * num_contacts);
+
+  const auto& query_object = EvalGeometryQueryInput(context);
 
   contact_results->Clear();
   for (size_t icontact = 0; icontact < point_pairs.size(); ++icontact) {
@@ -1395,25 +1427,55 @@ void MultibodyPlant<T>::CalcContactResultsDiscrete(
     const BodyIndex bodyA_index = geometry_id_to_body_index_.at(geometryA_id);
     const BodyIndex bodyB_index = geometry_id_to_body_index_.at(geometryB_id);
 
-    const Vector3<T> p_WC = 0.5 * (pair.p_WCa + pair.p_WCb);
+    //const Body<T>& bodyA = get_body(bodyA_index);
+    //const Body<T>& bodyB = get_body(bodyB_index);
 
-    const RotationMatrix<T>& R_WC = R_WC_set[icontact];
+    const RigidTransform<double>& X_WA = query_object.GetPoseInWorld(pair.id_A);
+    const RigidTransform<double>& X_WB = query_object.GetPoseInWorld(pair.id_B);
+
+    // The the poses and spatial velocities of bodies A and B.
+    //const RigidTransform<T>& X_WA = bodyA.EvalPoseInWorld(context);
+    //const RigidTransform<T>& X_WB = bodyB.EvalPoseInWorld(context);
+
+    //const RigidTransform<T>& X_AM = inspector.GetPoseInFrame(pair.id_A);
+    //const RigidTransform<T>& X_BN = inspector.GetPoseInFrame(pair.id_B);
+
+    //const RigidTransform<T> X_WM = X_WA * X_AM;
+    //const RigidTransform<T> X_WN = X_WB * X_BN;
+
+    const Vector3<double> p_WCa = X_WA * pair.p_ACa;
+    const Vector3<double> p_WCb = X_WB * pair.p_BCb;
+
+    const Vector3<double> p_WC = 0.5 * (p_WCa + p_WCb);
+
+    const RotationMatrix<double>& R_WC = R_WC_set[icontact];
 
     // Contact forces applied on B at contact point C.
-    const Vector3<T> f_Bc_C(ft(2 * icontact), ft(2 * icontact + 1),
+    const Vector3<double> f_Bc_C(ft(2 * icontact), ft(2 * icontact + 1),
                             -fn(icontact));
-    const Vector3<T> f_Bc_W = R_WC * f_Bc_C;
+    const Vector3<double> f_Bc_W = R_WC * f_Bc_C;
 
     // Slip velocity.
-    const T slip = vt.template segment<2>(2 * icontact).norm();
+    const double slip = vt.template segment<2>(2 * icontact).norm();
 
     // Separation velocity in the normal direction.
-    const T separation_velocity = vn(icontact);
+    const double separation_velocity = vn(icontact);
+
+    const PenetrationAsPointPair<double> pentration_pair{
+        pair.id_A, pair.id_B, p_WCa, p_WCb, pair.nhat_BA_W, -pair.distance};
 
     // Add pair info to the contact results.
     contact_results->AddContactInfo({bodyA_index, bodyB_index, f_Bc_W, p_WC,
-                                     separation_velocity, slip, pair});
+                                     separation_velocity, slip,
+                                     pentration_pair});
   }
+}
+
+template <typename T>
+void MultibodyPlant<T>::CalcContactResultsDiscrete(
+    const drake::systems::Context<T>&, ContactResults<T>*) const {
+  throw std::domain_error(fmt::format("This method doesn't support T = {}.",
+                                      NiceTypeName::Get<T>()));
 }
 
 template <typename T>
@@ -1870,7 +1932,7 @@ MultibodyPlant<T>::CalcDiscreteContactPairs(
     int num_point_pairs = 0;  // The number of point contact pairs.
     if (contact_model_ == ContactModel::kPointContactOnly ||
         contact_model_ == ContactModel::kHydroelasticWithFallback) {
-      num_point_pairs = EvalPointPairPenetrations(context).size();
+      num_point_pairs = EvalSignedDistancePairwise(context).size();
     }
     // TODO(amcastro-tri): include hydroelastic quadrature pairs.
     const int num_quadrature_pairs = 0;  // to be included next PR.
@@ -1885,21 +1947,41 @@ MultibodyPlant<T>::CalcDiscreteContactPairs(
 
     // Fill in the point contact pairs.
     if (num_point_pairs > 0) {
-      const std::vector<PenetrationAsPointPair<T>>& point_pairs =
-          EvalPointPairPenetrations(context);
-      for (const PenetrationAsPointPair<T>& pair : point_pairs) {
+      const std::vector<SignedDistancePair<T>>& point_pairs =
+          EvalSignedDistancePairwise(context);
+      for (const SignedDistancePair<T>& pair : point_pairs) {
         const auto [kA, dA] =
             GetPointContactParameters(pair.id_A, inspector);
         const auto [kB, dB] =
             GetPointContactParameters(pair.id_B, inspector);
         const auto [k, d] = CombinePointContactParameters(kA, kB, dA, dB);
-        const T phi0 = -pair.depth;
-        const T fn0 = k * pair.depth;
-        DRAKE_DEMAND(fn0 >= 0);  // it should be since depth >= 0.
+        const T phi0 = pair.distance;
+        const T fn0 = -k * phi0;
+        //DRAKE_DEMAND(fn0 >= 0);  // it should be since depth >= 0.
         // For now place contact point midway between Ca and Cb.
         // TODO(amcastro-tri): Consider using stiffness weighted location of
         // point C between Ca and Cb.
-        const Vector3<T> p_WC = 0.5 * (pair.p_WCa + pair.p_WCb);
+        //const Vector3<T> p_WC = 0.5 * (pair.p_WCa + pair.p_WCb);
+
+        //const BodyIndex bodyA_index = geometry_id_to_body_index_.at(pair.id_A);
+        //const BodyIndex bodyB_index = geometry_id_to_body_index_.at(pair.id_B);
+        //const Body<T>& bodyA = get_body(bodyA_index);
+        //const Body<T>& bodyB = get_body(bodyB_index);
+
+        // The the poses and spatial velocities of bodies A and B.
+        const RigidTransform<T>& X_WA = query_object.GetPoseInWorld(pair.id_A);
+        const RigidTransform<T>& X_WB = query_object.GetPoseInWorld(pair.id_B);
+
+        //const RigidTransform<T>& X_AM = inspector.GetPoseInFrame(pair.id_A);
+        //const RigidTransform<T>& X_BN = inspector.GetPoseInFrame(pair.id_B);
+
+        //const RigidTransform<T> X_WM = X_WA * X_AM;
+        //const RigidTransform<T> X_WN = X_WB * X_BN;
+
+        const Vector3<T> p_WCa = X_WA * pair.p_ACa;
+        const Vector3<T> p_WCb = X_WB * pair.p_BCb;
+
+        const Vector3<T> p_WC = 0.5 * (p_WCa + p_WCb);
         contact_pairs.push_back(
             {pair.id_A, pair.id_B, p_WC, pair.nhat_BA_W, phi0, fn0, k, d});
       }
@@ -2582,6 +2664,22 @@ void MultibodyPlant<T>::DeclareCacheEntries() {
       },
       {this->configuration_ticket()});
   cache_indexes_.point_pairs = point_pairs_cache_entry.cache_index();
+
+  auto& sdf_pairs_cache_entry = this->DeclareCacheEntry(
+      std::string("SDF pairs."),
+      []() {
+        return AbstractValue::Make(
+            std::vector<geometry::SignedDistancePair<T>>());
+      },
+      [this](const systems::ContextBase& context_base,
+             AbstractValue* cache_value) {
+        auto& context = dynamic_cast<const Context<T>&>(context_base);
+        auto& sdf_pairs_cache = cache_value->get_mutable_value<
+            std::vector<geometry::SignedDistancePair<T>>>();
+        sdf_pairs_cache = this->CalcSignedDistancePairwise(context);
+      },
+      {this->configuration_ticket()});
+  cache_indexes_.sdf_pairs = sdf_pairs_cache_entry.cache_index();  
 
   // Cache entry for hydroelastic contact surfaces.
   auto& contact_surfaces_cache_entry = this->DeclareCacheEntry(

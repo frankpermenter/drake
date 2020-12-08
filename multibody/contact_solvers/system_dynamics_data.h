@@ -17,6 +17,9 @@ class SystemDynamicsData {
  public:
   DRAKE_DEFAULT_COPY_AND_MOVE_AND_ASSIGN(SystemDynamicsData)
 
+  /// Empty problem data with zero velocities.
+  SystemDynamicsData() = default;
+
   /// Specifies the dynamics of the system by providing Ainv, a linear operator
   /// form of the inverse of the system dynamics Jacobian matrix A and the
   /// vector of predicted generalized velocities v^*. Refer to ContactSolver for

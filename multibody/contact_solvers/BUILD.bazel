@@ -35,6 +35,25 @@ drake_cc_library(
 )
 
 drake_cc_library(
+    name = "mp_convex_solver",
+    srcs = ["mp_convex_solver.cc"],
+    hdrs = ["mp_convex_solver.h"],
+    copts = ["-Wno-error=unused-parameter", "-Wno-error=unused-variable"],
+    deps = [
+        ":contact_solver",
+        ":contact_solver_utils",
+        ":point_contact_data",
+        ":system_dynamics_data",
+        "//common:default_scalars",
+        ":friction_cone_constraint",
+        "//common:essential",
+        "//solvers:choose_best_solver",
+        "//solvers:mathematical_program",
+        "//solvers:solve",
+    ],
+)
+
+drake_cc_library(
     name = "multibody_sim_driver",
     testonly = 1,
     srcs = ["test/multibody_sim_driver.cc"],
@@ -44,10 +63,39 @@ drake_cc_library(
         "//geometry:drake_visualizer",
         "//multibody/parsing",
         "//multibody/plant",
+        "//multibody/plant:contact_results_to_lcm",
         "//systems/analysis:simulator",
         "//systems/framework:diagram",
         "//systems/framework:diagram_builder",
         "//systems/lcm",
+    ],
+)
+
+drake_cc_library(
+    name = "pgs_solver",
+    srcs = ["test/pgs_solver.cc"],
+    hdrs = ["test/pgs_solver.h"],
+    visibility = ["//visibility:private"],
+    copts = ["-Wno-error=unused-parameter", "-Wno-error=unused-variable"],
+    deps = [
+        ":contact_solver",
+        ":contact_solver_utils",
+        ":point_contact_data",
+        ":system_dynamics_data",
+        "//common:default_scalars",
+    ],
+)
+
+drake_cc_library(
+    name = "friction_cone_constraint",
+    srcs = ["friction_cone_constraint.cc"],
+    hdrs = ["friction_cone_constraint.h"],
+    deps = [
+        "//common:essential",
+        "//solvers:constraint",
+        "//common:autodiff",        
+        "//common:symbolic",
+        "//math:gradient",
     ],
 )
 
@@ -80,6 +128,29 @@ drake_cc_library(
     deps = [
         "//common:default_scalars",
         "//common:essential",
+    ],
+)
+
+drake_cc_library(
+    name = "analytical_inverse_dynamics",
+    srcs = [],
+    hdrs = ["analytical_inverse_dynamics.h"],
+    deps = [
+        "//common:essential",
+    ],
+)
+
+
+drake_cc_library(
+    name = "numerical_inverse_dynamics",
+    srcs = ["numerical_inverse_dynamics.cc"],
+    hdrs = ["numerical_inverse_dynamics.h"],
+    deps = [
+        ":friction_cone_constraint",
+        "//common:essential",
+        "//solvers:choose_best_solver",
+        "//solvers:mathematical_program",
+        "//solvers:solve",
     ],
 )
 
@@ -126,9 +197,32 @@ drake_cc_googletest(
 )
 
 drake_cc_googletest(
+    name = "inverse_dynamics_test",
+    deps = [
+        ":analytical_inverse_dynamics",
+        ":numerical_inverse_dynamics",
+        "//common/test_utilities:eigen_matrix_compare",
+    ],
+)
+
+drake_cc_googletest(
     name = "linear_operator_test",
     deps = [
         ":linear_operator",
+        "//common/test_utilities:expect_throws_message",
+    ],
+)
+
+drake_cc_googletest(
+    name = "pizza_saver_test",
+    data = ["test/pizza_saver.sdf"],
+    copts = ["-Wno-error=unused-parameter", "-Wno-error=unused-variable"],
+    deps = [
+        ":contact_solver",
+        ":mp_convex_solver",
+        ":multibody_sim_driver",
+        ":pgs_solver",        
+        "//common/test_utilities:eigen_matrix_compare",
         "//common/test_utilities:expect_throws_message",
     ],
 )

@@ -2323,6 +2323,21 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
     }
   }
 
+  const std::vector<geometry::SignedDistancePair<T>>&
+  EvalSignedDistancePairwise(const systems::Context<T>& context) const {
+    DRAKE_MBP_THROW_IF_NOT_FINALIZED();
+    switch (contact_model_) {
+      case ContactModel::kPointContactOnly:
+        return this->get_cache_entry(cache_indexes_.sdf_pairs)
+            .template Eval<std::vector<geometry::SignedDistancePair<T>>>(
+                context);
+      default:
+        throw std::logic_error(
+            "Attempting to evaluate point pair contact for contact model that "
+            "doesn't use it");
+    }
+  }
+
   /// Calculates the rigid transform (pose) `X_FG` relating frame F and frame G.
   /// @param[in] context
   ///    The state of the multibody system, which includes the system's
@@ -3767,6 +3782,7 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
     systems::CacheIndex generalized_contact_forces_continuous;
     systems::CacheIndex hydro_fallback;
     systems::CacheIndex point_pairs;
+    systems::CacheIndex sdf_pairs;
     systems::CacheIndex spatial_contact_forces_continuous;
     systems::CacheIndex tamsi_solver_results;
   };
@@ -4208,6 +4224,9 @@ class MultibodyPlant : public internal::MultibodyTreeSystem<T> {
   // different scalar types.
   std::vector<geometry::PenetrationAsPointPair<T>>
   CalcPointPairPenetrations(const systems::Context<T>& context) const;
+
+  std::vector<geometry::SignedDistancePair<T>>
+  CalcSignedDistancePairwise(const systems::Context<T>& context) const;
 
   // This helper method combines the friction properties for each pair of
   // contact points in `point_pairs` according to
@@ -4702,10 +4721,22 @@ struct AddMultibodyPlantSceneGraphResult final {
 template <>
 typename MultibodyPlant<symbolic::Expression>::SceneGraphStub&
 MultibodyPlant<symbolic::Expression>::member_scene_graph();
+
 template <>
 std::vector<geometry::PenetrationAsPointPair<symbolic::Expression>>
 MultibodyPlant<symbolic::Expression>::CalcPointPairPenetrations(
-    const systems::Context<symbolic::Expression>&) const;
+    const systems::Context<symbolic::Expression>&) const;    
+
+template <>
+std::vector<geometry::SignedDistancePair<double>>
+MultibodyPlant<double>::CalcSignedDistancePairwise(
+    const systems::Context<double>&) const;
+
+template <>
+void MultibodyPlant<double>::CalcContactResultsDiscrete(
+    const systems::Context<double>&,
+    ContactResults<double>*) const;
+
 template <>
 std::vector<CoulombFriction<double>>
 MultibodyPlant<symbolic::Expression>::CalcCombinedFrictionCoefficients(
