@@ -13,6 +13,7 @@
 #include "drake/multibody/plant/contact_results_to_lcm.h"
 #include "drake/multibody/tree/prismatic_joint.h"
 #include "drake/solvers/gurobi_solver.h"
+#include "drake/solvers/conex_solver.h"
 #include "drake/solvers/ipopt_solver.h"
 #include "drake/solvers/nlopt_solver.h"
 #include "drake/solvers/scs_solver.h"
@@ -31,7 +32,7 @@ DEFINE_double(simulation_time, 0.15, "Duration of the simulation in seconds.");
 DEFINE_bool(use_tamsi, false,
             "If true it uses TAMSI, otherwise MpConvexSolver.");
 // If using Gurobi, compile with: bazel run --config gurobi ....            
-DEFINE_string(solver, "scs", "Underlying solver. 'gurobi', 'scs'");
+DEFINE_string(solver, "conex", "Underlying solver. 'gurobi', 'conex'");
 
 namespace drake {
 namespace multibody {
@@ -110,16 +111,23 @@ int do_main() {
     // Nlopt: "converges", but analytical ID errors are large.
     // params.solver_id = solvers::NloptSolver::id();
 
-    if (FLAGS_solver == "scs") {
+
+    if (FLAGS_solver == "conex") {
       // ScsSolver: Shows good performance/convergence.
-      params.solver_id = solvers::ScsSolver::id();
-    } else if (FLAGS_solver == "gurobi") {
-      // GurobiSolver.
-      // Compile with: bazel run --config gurobi ....
-      params.solver_id = solvers::GurobiSolver::id();
+      params.solver_id = solvers::ConexSolver::id();
     } else {
-      throw std::runtime_error("Solver not supported.");
+      if (FLAGS_solver == "scs") {
+        // ScsSolver: Shows good performance/convergence.
+        params.solver_id = solvers::ScsSolver::id();
+      } else if (FLAGS_solver == "gurobi") {
+        // GurobiSolver.
+        // Compile with: bazel run --config gurobi ....
+        params.solver_id = solvers::GurobiSolver::id();
+      } else {
+        throw std::runtime_error("Solver not supported.");
+      }
     }
+    
     solver->set_parameters(params);
   }
 

@@ -80,6 +80,11 @@ void OptimizationProgram::RunProblem(SolverInterface* solver) {
 double OptimizationProgram::GetSolverSolutionDefaultCompareTolerance(
     SolverType solver_type) const {
   switch (solver_type) {
+    case SolverType::kConex: {
+      // TODO(FrankPermenter): Update this once Conex driver is fully
+      // integrated.
+      return 3E-5;
+    }
     case SolverType::kMosek: {
       return 1E-10;
     }

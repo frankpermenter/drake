@@ -4,7 +4,6 @@
 #include <memory>
 
 #include <Eigen/SparseCore>
-#include <gtest/gtest.h>
 
 #include "drake/multibody/contact_solvers/contact_solver.h"
 #include "drake/multibody/contact_solvers/contact_solver_utils.h"
