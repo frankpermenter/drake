@@ -283,9 +283,9 @@ void ConexSolver::DoSolve(
   conex::SolverConfiguration config;
   config.prepare_dual_variables = 1;
   config.max_iterations = 25;
-  config.divergence_upper_bound = 1;
-  config.final_centering_steps = 2;
-  config.inv_sqrt_mu_max = 1000;
+  config.divergence_upper_bound = 1000;
+  config.final_centering_steps = 0;
+  config.inv_sqrt_mu_max = 100000;
   SolutionResult solution_result{SolutionResult::kSolutionFound};
   if (!conex::Solve(-c, conex_prog, config, x.data())) {
     solution_result = SolutionResult::kInfeasibleConstraints;
