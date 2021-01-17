@@ -178,13 +178,13 @@ int do_main() {
         solver->get_stats_history();
     std::cout << std::string(80, '-') << std::endl;
     std::cout << std::string(80, '-') << std::endl;
-    fmt::print("{:>18} {:>18} {:>18}  {:>18}\n", "num_contacts", "id_rel_err",
-               "id_abs_error", "gamma_norm", "vs_max");
+    fmt::print("{:>18} {:>18} {:>18}  {:>18}  {:>18}\n", "num_contacts", "id_rel_err",
+               "id_abs_error", "gamma_norm", "solve_time");
     for (const auto& s : stats_hist) {
       fmt::print("{:d} {:20.8g} {:20.8g} {:20.8g} {:20.8g}\n", s.num_contacts,
                  s.iteration_errors.id_rel_error,
                  s.iteration_errors.id_abs_error, s.iteration_errors.gamma_norm,
-                 s.iteration_errors.vs_max);
+                 s.solver_time);
     }
   }
 
